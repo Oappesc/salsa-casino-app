@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F8FAFC;
+  --foreground: #0F172A;
+  --card: #FFFFFF;
+  --border: #E2E8F0;
+  --accent: #9333EA;
+  --accent-light: #A855F7;
+  --accent-glow: rgba(168, 85, 247, 0.35);
+  --text-secondary: #475569;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Neon glow utility */
+.shadow-neon {
+  box-shadow: 0 4px 20px rgba(168, 85, 247, 0.35);
+}
+
+.shadow-neon-sm {
+  box-shadow: 0 2px 12px rgba(168, 85, 247, 0.25);
+}
