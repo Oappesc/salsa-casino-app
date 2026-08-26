@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Lock, Unlock, PlayCircle, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { Lock, Unlock, PlayCircle, ChevronDown, ChevronUp, AlertCircle, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
@@ -19,14 +19,19 @@ const flatSublevels = [
 
 type LevelTab = "Básico" | "Intermedio" | "Avanzado";
 
-// Mock de figuras (en el futuro esto debería venir de Supabase)
-const initialFigures = [
-  { id: 1, name: "Paso Básico", mainLevel: "Básico", sublevel: "Básico I", videoUrl: "#" },
-  { id: 2, name: "Exhíbela", mainLevel: "Básico", sublevel: "Básico I", videoUrl: "#" },
-  { id: 3, name: "Dile que no", mainLevel: "Básico", sublevel: "Básico I", videoUrl: "#" },
-  { id: 4, name: "Enchufla", mainLevel: "Básico", sublevel: "Básico II", videoUrl: null },
-  { id: 5, name: "Setenta", mainLevel: "Intermedio", sublevel: "Intermedio I", videoUrl: null },
-];
+// Convertir links de YT a embed
+const formatYoutubeEmbed = (url: string) => {
+  if (!url) return "";
+  let videoId = "";
+  if (url.includes("youtu.be/")) {
+    videoId = url.split("youtu.be/")[1]?.split("?")[0];
+  } else if (url.includes("youtube.com/shorts/")) {
+    videoId = url.split("shorts/")[1]?.split("?")[0];
+  } else if (url.includes("youtube.com/watch")) {
+    videoId = new URL(url).searchParams.get("v") || "";
+  }
+  return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+};
 
 export default function PensumPage() {
   const [activeTab, setActiveTab] = useState<LevelTab>("Básico");
@@ -35,9 +40,12 @@ export default function PensumPage() {
   const [userSublevel, setUserSublevel] = useState("Básico I");
   const [userStatus, setUserStatus] = useState("Activo");
   const [loading, setLoading] = useState(true);
+  
+  const [figures, setFigures] = useState<any[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
@@ -50,7 +58,6 @@ export default function PensumPage() {
           setUserSublevel(profile.sublevel || "Básico I");
           setUserStatus(profile.status || "Activo");
           
-          // Set initial active tab based on user sublevel
           if (sublevelsMap.Intermedio.includes(profile.sublevel)) {
             setActiveTab("Intermedio");
           } else if (sublevelsMap.Avanzado.includes(profile.sublevel)) {
@@ -59,9 +66,20 @@ export default function PensumPage() {
           setExpandedSublevel(profile.sublevel || "Básico I");
         }
       }
+
+      // Fetch dynamic syllabus
+      const { data: syllabusData } = await supabase
+        .from("syllabus")
+        .select("*")
+        .order("order_index", { ascending: true });
+        
+      if (syllabusData) {
+        setFigures(syllabusData);
+      }
+      
       setLoading(false);
     };
-    fetchProfile();
+    fetchData();
   }, []);
 
   const toggleSublevel = (sublevel: string) => {
@@ -118,7 +136,7 @@ export default function PensumPage() {
       <div className="flex flex-col gap-3">
         {sublevelsMap[activeTab].map((sublevel) => {
           const isExpanded = expandedSublevel === sublevel;
-          const sublevelFigures = initialFigures.filter((f) => f.sublevel === sublevel);
+          const sublevelFigures = figures.filter((f) => f.sublevel === sublevel);
           
           const sublevelIndex = flatSublevels.indexOf(sublevel);
           const isSublevelUnlocked = userStatus === "Activo" && sublevelIndex <= userSublevelIndex;
@@ -145,6 +163,7 @@ export default function PensumPage() {
                   {sublevelFigures.length > 0 ? (
                     sublevelFigures.map((figure) => {
                       const figureUnlocked = isSublevelUnlocked;
+                      const hasVideo = !!figure.video_url;
                       return (
                         <div
                           key={figure.id}
@@ -169,9 +188,14 @@ export default function PensumPage() {
                           </div>
                           
                           <button 
-                            disabled={!figureUnlocked}
+                            disabled={!figureUnlocked || !hasVideo}
+                            onClick={() => {
+                              if (figureUnlocked && hasVideo) {
+                                setSelectedVideo(figure.video_url);
+                              }
+                            }}
                             className={`p-2 transition-colors ${
-                              figureUnlocked 
+                              figureUnlocked && hasVideo
                                 ? "text-purple-500 hover:text-purple-700" 
                                 : "text-slate-300 cursor-not-allowed"
                             }`}
@@ -193,6 +217,34 @@ export default function PensumPage() {
           );
         })}
       </div>
+
+      {/* Modal de Video */}
+      {selectedVideo && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedVideo(null)}
+        >
+          <div 
+            className="w-full max-w-sm bg-black rounded-2xl overflow-hidden shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setSelectedVideo(null)}
+              className="absolute -top-12 right-0 text-white hover:text-slate-300 p-2"
+            >
+              <X size={28} />
+            </button>
+            <div className="aspect-[9/16] w-full relative bg-slate-900">
+              <iframe 
+                src={formatYoutubeEmbed(selectedVideo)} 
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
