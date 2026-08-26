@@ -97,12 +97,24 @@ export default function AdminPage() {
     setLoadingAttendances(false);
   };
 
+  const formatWhatsappNumber = (phone: string) => {
+    if (!phone) return '';
+    let cleaned = phone.replace(/\D/g, ''); // Deja solo números
+    if (cleaned.startsWith('0')) {
+      cleaned = '58' + cleaned.slice(1);
+    } else if (!cleaned.startsWith('58')) {
+      cleaned = '58' + cleaned;
+    }
+    return cleaned;
+  };
+
   const handleUpdatePayment = async (paymentId: string, status: 'verified' | 'rejected', phone: string, studentName: string, concept: string) => {
     await supabase.from('payments').update({ status }).eq('id', paymentId);
     
     if (status === 'verified' && phone) {
-      const msg = `¡Hola ${studentName}!%0A%0ATu pago por el concepto de *${concept}* ha sido *Validado* exitosamente.%0A%0A¡Gracias por formar parte de la Familia Rumbera!`;
-      window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+      const msg = `¡Hola ${studentName}!\n\nTu pago por el concepto de *${concept}* ha sido *Validado* exitosamente.\n\n¡Gracias por formar parte de la Familia Rumbera!`;
+      const formattedPhone = formatWhatsappNumber(phone);
+      window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     }
     loadPayments();
   };
