@@ -109,29 +109,43 @@ export default function AdminPage() {
   };
 
   const handleUpdatePayment = async (paymentId: string, status: 'verified' | 'rejected', phone: string, studentName: string, concept: string) => {
-    try {
-      // Optmistic UI update
-      setPayments(prev => prev.filter(p => p.id !== paymentId));
+    const safeConcept = concept || 'Mensualidad';
+    const safeStudentName = studentName || 'Estudiante';
 
-      const { error } = await supabase.from('payments').update({ status }).eq('id', paymentId);
-      
+    try {
+      // 1. Persistir en Supabase PRIMERO
+      const { error, data } = await supabase
+        .from('payments')
+        .update({ status })
+        .eq('id', paymentId)
+        .select();
+
       if (error) {
-        throw error;
+        console.error('Supabase update error:', error);
+        throw new Error(`RLS o permisos: ${error.message} (code: ${error.code})`);
       }
 
+      console.log('Payment updated in DB:', data);
+
+      // 2. Solo si la BD confirmó, quitar de la lista local
+      setPayments(prev => prev.filter(p => p.id !== paymentId));
+
+      // 3. WhatsApp
       if (phone) {
         let msg = "";
         if (status === 'verified') {
-          msg = `¡Hola ${studentName}!\n\nTu pago por el concepto de *${concept}* ha sido *Validado* exitosamente.\n\n¡Gracias por formar parte de la Familia Rumbera!`;
+          msg = `¡Hola ${safeStudentName}!\n\nTu pago por el concepto de *${safeConcept}* ha sido *Validado* exitosamente.\n\n¡Gracias por formar parte de la Familia Rumbera!`;
         } else if (status === 'rejected') {
-          msg = `¡Hola ${studentName}!\n\nHubo un inconveniente con la verificación de tu pago por el concepto de *${concept}*. Por favor, revisa tu comprobante o contáctanos para aclarar la situación.\n\nAtentamente, Familia Rumbera.`;
+          msg = `¡Hola ${safeStudentName}!\n\nHubo un inconveniente con la verificación de tu pago por el concepto de *${safeConcept}*. Por favor, revisa tu comprobante o contáctanos para aclarar la situación.\n\nAtentamente, Familia Rumbera.`;
         }
         const formattedPhone = formatWhatsappNumber(phone);
         window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
       }
     } catch (err: any) {
-      alert("Error al actualizar el pago en la base de datos: " + err.message);
-      loadPayments(); // Revert on error
+      console.error('Error completo:', err);
+      alert("⚠️ No se pudo actualizar el pago en Supabase.\n\nDetalle: " + err.message + "\n\nAsegúrate de haber ejecutado el script update_schema_v5_rls_fix.sql en el SQL Editor de Supabase.");
+      // NO eliminamos de la lista; recargamos para reflejar el estado real
+      loadPayments();
     }
   };
 
