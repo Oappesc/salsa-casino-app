@@ -49,8 +49,9 @@ export default function PaymentsPage() {
   }, []);
 
   const calculateNextMonth = (history: any[]) => {
-    if (history.length === 0) { setNextMonthToPay(MONTH_NAMES[new Date().getMonth()]); return; }
-    const lastDate = new Date(history[0].created_at);
+    const validPayments = history.filter(p => p.status !== 'rejected');
+    if (validPayments.length === 0) { setNextMonthToPay(MONTH_NAMES[new Date().getMonth()]); return; }
+    const lastDate = new Date(validPayments[0].created_at);
     let nextMonthIdx = lastDate.getMonth() + 1;
     if (nextMonthIdx > 11) nextMonthIdx = 0;
     setNextMonthToPay(MONTH_NAMES[nextMonthIdx]);

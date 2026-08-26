@@ -109,14 +109,30 @@ export default function AdminPage() {
   };
 
   const handleUpdatePayment = async (paymentId: string, status: 'verified' | 'rejected', phone: string, studentName: string, concept: string) => {
-    await supabase.from('payments').update({ status }).eq('id', paymentId);
-    
-    if (status === 'verified' && phone) {
-      const msg = `¡Hola ${studentName}!\n\nTu pago por el concepto de *${concept}* ha sido *Validado* exitosamente.\n\n¡Gracias por formar parte de la Familia Rumbera!`;
-      const formattedPhone = formatWhatsappNumber(phone);
-      window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    try {
+      // Optmistic UI update
+      setPayments(prev => prev.filter(p => p.id !== paymentId));
+
+      const { error } = await supabase.from('payments').update({ status }).eq('id', paymentId);
+      
+      if (error) {
+        throw error;
+      }
+
+      if (phone) {
+        let msg = "";
+        if (status === 'verified') {
+          msg = `¡Hola ${studentName}!\n\nTu pago por el concepto de *${concept}* ha sido *Validado* exitosamente.\n\n¡Gracias por formar parte de la Familia Rumbera!`;
+        } else if (status === 'rejected') {
+          msg = `¡Hola ${studentName}!\n\nHubo un inconveniente con la verificación de tu pago por el concepto de *${concept}*. Por favor, revisa tu comprobante o contáctanos para aclarar la situación.\n\nAtentamente, Familia Rumbera.`;
+        }
+        const formattedPhone = formatWhatsappNumber(phone);
+        window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+      }
+    } catch (err: any) {
+      alert("Error al actualizar el pago en la base de datos: " + err.message);
+      loadPayments(); // Revert on error
     }
-    loadPayments();
   };
 
   const handleUpdateStudent = async (studentId: string, sublevel: string, status: string) => {
