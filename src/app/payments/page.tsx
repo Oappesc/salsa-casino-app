@@ -49,12 +49,27 @@ export default function PaymentsPage() {
   }, []);
 
   const calculateNextMonth = (history: any[]) => {
-    const validPayments = history.filter(p => p.status !== 'rejected');
-    if (validPayments.length === 0) { setNextMonthToPay(MONTH_NAMES[new Date().getMonth()]); return; }
-    const lastDate = new Date(validPayments[0].created_at);
-    let nextMonthIdx = lastDate.getMonth() + 1;
-    if (nextMonthIdx > 11) nextMonthIdx = 0;
-    setNextMonthToPay(MONTH_NAMES[nextMonthIdx]);
+    // Buscar el último pago aprobado
+    const verifiedPayments = history.filter(p => p.status === 'verified');
+    
+    if (verifiedPayments.length === 0) { 
+      setNextMonthToPay(MONTH_NAMES[new Date().getMonth()]); 
+      return; 
+    }
+    
+    const lastPayment = verifiedPayments[0];
+    const concept = lastPayment.concept || "";
+    
+    // Intentar buscar el mes en el concepto (ej: "Mensualidad Septiembre")
+    const matchedMonthIdx = MONTH_NAMES.findIndex(m => concept.includes(m));
+    
+    if (matchedMonthIdx !== -1) {
+      setNextMonthToPay(MONTH_NAMES[(matchedMonthIdx + 1) % 12]);
+    } else {
+      // Fallback a la fecha de creación
+      const lastDate = new Date(lastPayment.created_at);
+      setNextMonthToPay(MONTH_NAMES[(lastDate.getMonth() + 1) % 12]);
+    }
   };
 
   const handleCopy = (text: string, field: string) => {

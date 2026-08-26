@@ -14,11 +14,17 @@ export default function DashboardPage() {
 
   const [currentLevel, setCurrentLevel] = useState("Cargando...");
   const [attendancePercentage, setAttendancePercentage] = useState("100%");
-  const [monthlyFee, setMonthlyFee] = useState("$10");
   const [scheduleInfo, setScheduleInfo] = useState("Cargando...");
   const [accountStatus, setAccountStatus] = useState("Activo");
   
   const [attendances, setAttendances] = useState<any[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [nextPaymentDate, setNextPaymentDate] = useState<string>("Cargando...");
+
+  const MONTH_NAMES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
 
   useEffect(() => {
     const getUserData = async () => {
@@ -59,13 +65,34 @@ export default function DashboardPage() {
           }
         }
 
-        // Fetch attendances
+        // Fetch last payment
+        const { data: payData } = await supabase
+          .from("payments")
+          .select("concept, created_at")
+          .eq("user_id", user.id)
+          .eq("status", "verified")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (payData && payData.length > 0) {
+          const concept = payData[0].concept || "";
+          const matchedMonthIdx = MONTH_NAMES.findIndex(m => concept.includes(m));
+          if (matchedMonthIdx !== -1) {
+            setNextPaymentDate(`5 de ${MONTH_NAMES[(matchedMonthIdx + 1) % 12]}`);
+          } else {
+            const lastDate = new Date(payData[0].created_at);
+            setNextPaymentDate(`5 de ${MONTH_NAMES[(lastDate.getMonth() + 1) % 12]}`);
+          }
+        } else {
+          setNextPaymentDate(`5 de ${MONTH_NAMES[new Date().getMonth()]}`);
+        }
+
+        // Fetch attendances with classes
         const { data: attData } = await supabase
           .from("attendances")
-          .select("*")
+          .select("id, status, date, class_id, classes(date, schedule, location)")
           .eq("user_id", user.id)
-          .order("date", { ascending: false })
-          .limit(5);
+          .order("created_at", { ascending: false });
         
         if (attData) {
           setAttendances(attData);
@@ -76,23 +103,33 @@ export default function DashboardPage() {
     getUserData();
   }, []);
 
-  const getNextPaymentDate = () => {
-    const today = new Date();
-    let targetMonth = today.getMonth();
-    if (today.getDate() > 5) {
-      targetMonth = (targetMonth + 1) % 12;
+  useEffect(() => {
+    // Calculate percentage based on selected month
+    const monthAttendances = attendances.filter(a => {
+      const dateStr = a.classes?.date || a.date;
+      return new Date(dateStr + 'T00:00:00').getMonth() === selectedMonth;
+    });
+
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    const pastClasses = monthAttendances.filter(a => {
+      const dateStr = a.classes?.date || a.date;
+      const d = new Date(dateStr + 'T00:00:00');
+      return d <= now;
+    });
+
+    if (pastClasses.length === 0) {
+      setAttendancePercentage("N/A");
+    } else {
+      const attendedCount = pastClasses.filter(a => a.status === 'attended').length;
+      setAttendancePercentage(`${Math.round((attendedCount / pastClasses.length) * 100)}%`);
     }
-    const monthNames = [
-      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-    ];
-    return `5 de ${monthNames[targetMonth]}`;
-  };
+  }, [attendances, selectedMonth]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'attended': return <span className="flex items-center gap-1 text-xs font-medium bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full border border-emerald-200"><CheckCircle2 size={12}/> Asistió</span>;
-      case 'absent': return <span className="flex items-center gap-1 text-xs font-medium bg-red-50 text-red-500 px-2.5 py-1 rounded-full border border-red-200"><XCircle size={12}/> No asistió</span>;
+      case 'absent': return <span className="flex items-center gap-1 text-xs font-medium bg-red-50 text-red-500 px-2.5 py-1 rounded-full border border-red-200"><XCircle size={12}/> Faltó</span>;
       default: return <span className="flex items-center gap-1 text-xs font-medium bg-yellow-50 text-yellow-600 px-2.5 py-1 rounded-full border border-yellow-200"><Clock size={12}/> Pendiente</span>;
     }
   };
@@ -155,7 +192,7 @@ export default function DashboardPage() {
           <DollarSign className="text-purple-500" size={20} />
           <div>
             <p className="text-xs text-slate-500">Mensualidad</p>
-            <p className="font-semibold text-sm text-slate-900">{monthlyFee}</p>
+            <p className="font-semibold text-sm text-slate-900">$10</p>
           </div>
         </div>
 
@@ -181,7 +218,7 @@ export default function DashboardPage() {
           </h3>
           <p className={`text-sm mt-1 ${accountStatus === "Activo" ? "text-purple-700/70" : "text-red-700/70"}`}>
             {accountStatus === "Activo" 
-              ? `Tu próximo pago es el ${getNextPaymentDate()}.`
+              ? `Tu próximo pago es el ${nextPaymentDate}.`
               : "Tienes mensualidades pendientes por pagar."}
           </p>
         </div>
@@ -189,23 +226,44 @@ export default function DashboardPage() {
 
       {/* Clases Recientes */}
       <div className="mt-4">
-        <h2 className="text-lg font-semibold mb-4 text-slate-900">Clases Recientes</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Historial de Clases</h2>
+          <select 
+            value={selectedMonth} 
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2"
+          >
+            {MONTH_NAMES.map((month, idx) => (
+              <option key={month} value={idx}>{month}</option>
+            ))}
+          </select>
+        </div>
+        
         <div className="flex flex-col gap-3">
-          {attendances.length > 0 ? (
-            attendances.map((att) => (
-              <div key={att.id} className="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
-                <div>
-                  <p className="font-medium text-slate-900">Clase Regular</p>
-                  <p className="text-xs text-slate-500">
-                    {new Date(att.date + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}
-                  </p>
-                </div>
-                {getStatusBadge(att.status)}
-              </div>
-            ))
+          {attendances.filter(a => new Date((a.classes?.date || a.date) + 'T00:00:00').getMonth() === selectedMonth).length > 0 ? (
+            attendances
+              .filter(a => new Date((a.classes?.date || a.date) + 'T00:00:00').getMonth() === selectedMonth)
+              .map((att) => {
+                const dateStr = att.classes?.date || att.date;
+                const dateObj = new Date(dateStr + 'T12:00:00');
+                const locStr = att.classes?.location || "Clase Regular";
+                
+                return (
+                  <div key={att.id} className="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
+                    <div>
+                      <p className="font-medium text-slate-900">{locStr}</p>
+                      <p className="text-xs text-slate-500">
+                        {dateObj.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}
+                        {att.classes?.schedule ? ` • ${att.classes.schedule}` : ''}
+                      </p>
+                    </div>
+                    {getStatusBadge(att.status)}
+                  </div>
+                );
+            })
           ) : (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center shadow-sm">
-              <p className="text-sm text-slate-500">No tienes clases registradas aún.</p>
+              <p className="text-sm text-slate-500">No hay clases registradas en este mes.</p>
             </div>
           )}
         </div>
