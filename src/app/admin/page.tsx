@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { CheckCircle2, XCircle, Search, MessageCircle, MapPin, UserCheck, ShieldAlert, Users, CalendarCheck, FileText } from "lucide-react";
+import { CheckCircle2, XCircle, Search, MessageCircle, MapPin, UserCheck, ShieldAlert, Users, CalendarCheck, FileText, Clock } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -13,9 +13,22 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Asistencia states
+  const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attLevel, setAttLevel] = useState("Básico I");
+  const [classStudents, setClassStudents] = useState<any[]>([]);
+  const [classAttendances, setClassAttendances] = useState<Record<string, string>>({}); // userId -> status
+  const [loadingAttendances, setLoadingAttendances] = useState(false);
+
   useEffect(() => {
     checkAdminAndLoadData();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "asistencia") {
+      loadClassData();
+    }
+  }, [attDate, attLevel, activeTab]);
 
   const checkAdminAndLoadData = async () => {
     setLoading(true);
@@ -32,7 +45,7 @@ export default function AdminPage() {
     }
 
     if (activeTab === "pagos") loadPayments();
-    if (activeTab === "alumnos" || activeTab === "asistencia") loadStudents();
+    if (activeTab === "alumnos") loadStudents();
     
     setLoading(false);
   };
@@ -54,6 +67,36 @@ export default function AdminPage() {
     if (data) setStudents(data);
   };
 
+  const loadClassData = async () => {
+    setLoadingAttendances(true);
+    // Fetch students in this level
+    const { data: stData } = await supabase
+      .from('profiles')
+      .select('id, full_name, sublevel')
+      .eq('role', 'student')
+      .eq('sublevel', attLevel)
+      .eq('status', 'Activo')
+      .order('full_name', { ascending: true });
+
+    if (stData) setClassStudents(stData);
+    else setClassStudents([]);
+
+    // Fetch existing attendances for this date
+    const { data: attData } = await supabase
+      .from('attendances')
+      .select('user_id, status')
+      .eq('date', attDate);
+
+    const attMap: Record<string, string> = {};
+    if (attData) {
+      attData.forEach(a => {
+        attMap[a.user_id] = a.status || 'pending';
+      });
+    }
+    setClassAttendances(attMap);
+    setLoadingAttendances(false);
+  };
+
   const handleUpdatePayment = async (paymentId: string, status: 'verified' | 'rejected', phone: string, studentName: string, concept: string) => {
     await supabase.from('payments').update({ status }).eq('id', paymentId);
     
@@ -70,9 +113,23 @@ export default function AdminPage() {
     loadStudents();
   };
 
-  const markAttendance = async (studentId: string, status: 'Asistió' | 'Faltó') => {
-    // In a real app we'd insert into attendances table
-    alert(`Asistencia marcada como: ${status}`);
+  const markAttendance = async (studentId: string, status: 'attended' | 'absent' | 'pending') => {
+    // Optimistic update
+    setClassAttendances(prev => ({ ...prev, [studentId]: status }));
+
+    // Upsert into DB (assuming unique constraint user_id + date exists)
+    const { error } = await supabase
+      .from('attendances')
+      .upsert({ 
+        user_id: studentId, 
+        date: attDate,
+        status: status 
+      }, { onConflict: 'user_id,date' });
+
+    if (error) {
+      alert("Error al guardar asistencia");
+      loadClassData(); // Revert on error
+    }
   };
 
   const filteredStudents = students.filter(s => 
@@ -150,27 +207,85 @@ export default function AdminPage() {
       {/* TAB 2: ASISTENCIA */}
       {activeTab === "asistencia" && (
         <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="font-semibold text-slate-900">Asistencia del Día</h2>
-            <p className="text-xs text-slate-500 bg-slate-200 px-2 py-1 rounded-md">{new Date().toLocaleDateString('es-ES')}</p>
-          </div>
+          <h2 className="font-semibold text-slate-900 mb-2">Crear Clase / Asistencia</h2>
           
-          {students.map(student => (
-            <div key={student.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="font-bold text-slate-900">{student.full_name}</p>
-                <p className="text-xs text-purple-600 font-medium">{student.sublevel}</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => markAttendance(student.id, 'Asistió')} className="bg-emerald-50 text-emerald-600 p-2 rounded-full border border-emerald-200 hover:bg-emerald-100 transition-colors">
-                  <CheckCircle2 size={18} />
-                </button>
-                <button onClick={() => markAttendance(student.id, 'Faltó')} className="bg-red-50 text-red-600 p-2 rounded-full border border-red-200 hover:bg-red-100 transition-colors">
-                  <XCircle size={18} />
-                </button>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-slate-500 uppercase">Sede y Horario (Fijo)</label>
+              <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-sm text-slate-700">
+                La Sabana • 18:30 - 20:00 hrs
               </div>
             </div>
-          ))}
+
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Fecha</label>
+                <input 
+                  type="date" 
+                  value={attDate}
+                  onChange={e => setAttDate(e.target.value)}
+                  className="bg-white border border-slate-200 p-2.5 rounded-lg text-sm text-slate-700 outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Nivel/Grupo</label>
+                <select 
+                  value={attLevel}
+                  onChange={e => setAttLevel(e.target.value)}
+                  className="bg-white border border-slate-200 p-2.5 rounded-lg text-sm text-slate-700 outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="Básico I">Básico I</option>
+                  <option value="Básico II">Básico II</option>
+                  <option value="Básico III">Básico III</option>
+                  <option value="Básico IV">Básico IV</option>
+                  <option value="Intermedio I">Intermedio I</option>
+                  <option value="Intermedio II">Intermedio II</option>
+                  <option value="Avanzado I">Avanzado I</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <h3 className="font-semibold text-slate-900 mt-2">Lista de Alumnos</h3>
+          {loadingAttendances ? (
+            <p className="text-sm text-slate-500">Cargando alumnos...</p>
+          ) : classStudents.length === 0 ? (
+            <p className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-200">No hay alumnos activos en este nivel.</p>
+          ) : (
+            classStudents.map(student => {
+              const status = classAttendances[student.id] || 'pending';
+              return (
+                <div key={student.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <p className="font-bold text-slate-900">{student.full_name}</p>
+                    <span className="text-xs text-purple-600 font-medium bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">{student.sublevel}</span>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => markAttendance(student.id, 'pending')} 
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-colors ${status === 'pending' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                    >
+                      <Clock size={14} /> Pdt.
+                    </button>
+                    <button 
+                      onClick={() => markAttendance(student.id, 'attended')} 
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-colors ${status === 'attended' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                    >
+                      <CheckCircle2 size={14} /> Asistió
+                    </button>
+                    <button 
+                      onClick={() => markAttendance(student.id, 'absent')} 
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border transition-colors ${status === 'absent' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                    >
+                      <XCircle size={14} /> Faltó
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

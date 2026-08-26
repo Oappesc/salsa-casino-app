@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { Music } from "lucide-react";
+import Image from "next/image";
 
 export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen px-6 py-12 items-center justify-center bg-gradient-to-b from-slate-50 to-white">
-      <div className="bg-purple-100 p-6 rounded-full mb-8 shadow-neon-sm">
-        <Music size={64} className="text-purple-600" />
+      <div className="bg-purple-100 p-2 rounded-full mb-8 shadow-neon-sm overflow-hidden flex items-center justify-center w-28 h-28 border-4 border-white">
+        <Image 
+          src="/logo-familia-rumbera.png" 
+          alt="Logo Familia Rumbera" 
+          width={112} 
+          height={112} 
+          className="object-contain"
+        />
       </div>
       
       <h1 className="text-4xl font-bold text-center mb-2 text-slate-900">Familia Rumbera</h1>
