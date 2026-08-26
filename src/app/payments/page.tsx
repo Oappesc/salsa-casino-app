@@ -256,9 +256,17 @@ export default function PaymentsPage() {
               <div>
                 <p className="text-xs text-slate-400 mb-2">Comprobante / Foto</p>
                 {selectedPayment.receipt_url ? (
-                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 relative group">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedPayment.receipt_url} alt="Comprobante de pago" className="w-full h-auto max-h-64 object-contain" />
+                    <img 
+                      src={selectedPayment.receipt_url} 
+                      alt="Comprobante de pago" 
+                      className="w-full h-auto max-h-64 object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.parentElement!.innerHTML = '<p class="text-sm text-red-400 p-4 text-center">Error al cargar la imagen. El archivo no existe o fue eliminado.</p>';
+                      }}
+                    />
                   </div>
                 ) : <p className="text-sm text-slate-400">No hay imagen disponible</p>}
               </div>

@@ -196,6 +196,24 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteClass = async (classId: string) => {
+    try {
+      // Optmistic UI Update
+      setClassesList(prev => prev.filter(c => c.id !== classId));
+      
+      const { error } = await supabase.from('classes').delete().eq('id', classId);
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      alert("Clase y sus asistencias eliminadas con éxito.");
+    } catch (err: any) {
+      alert("Error al eliminar la clase: " + err.message);
+      loadClasses(); // Revert UI
+    }
+  };
+
 
   const filteredStudents = students.filter(s => 
     s.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -320,14 +338,29 @@ export default function AdminPage() {
           {classMode === 'list' && (
             <div className="flex flex-col gap-3">
               {classesList.map(cls => (
-                <div key={cls.id} onClick={() => handleSelectClass(cls)} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:border-purple-300">
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="font-bold text-slate-900">{cls.sublevel}</p>
-                    <span className="text-xs text-slate-500">{new Date(cls.date + 'T12:00:00').toLocaleDateString()}</span>
+                <div key={cls.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-purple-300 flex flex-col gap-3">
+                  <div className="flex justify-between items-center cursor-pointer" onClick={() => handleSelectClass(cls)}>
+                    <div>
+                      <p className="font-bold text-slate-900">{cls.sublevel}</p>
+                      <span className="text-xs text-slate-500">{new Date(cls.date + 'T12:00:00').toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex text-xs text-slate-500 gap-4">
+                      <span className="flex items-center gap-1"><MapPin size={12}/> {cls.location}</span>
+                      <span className="flex items-center gap-1"><Clock size={12}/> {cls.schedule}</span>
+                    </div>
                   </div>
-                  <div className="flex text-xs text-slate-500 gap-4">
-                    <span className="flex items-center gap-1"><MapPin size={12}/> {cls.location}</span>
-                    <span className="flex items-center gap-1"><Clock size={12}/> {cls.schedule}</span>
+                  <div className="flex justify-end border-t border-slate-100 pt-2">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if(confirm("¿Estás seguro de eliminar esta clase? Se borrarán los registros de asistencia asociados.")) {
+                          handleDeleteClass(cls.id);
+                        }
+                      }} 
+                      className="text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      <XCircle size={14} /> Eliminar clase
+                    </button>
                   </div>
                 </div>
               ))}
