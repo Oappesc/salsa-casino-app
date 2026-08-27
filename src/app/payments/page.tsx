@@ -15,11 +15,33 @@ const MONTH_NAMES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
+type Payment = {
+  id?: string;
+  status: string;
+  concept?: string;
+  created_at: string;
+  amount?: number;
+  amount_usd?: number;
+  amount_bs?: number;
+  payment_method?: string;
+  reference?: string;
+  receipt_url?: string;
+};
+
+function StatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'verified': return <span className="flex items-center gap-1 text-[10px] font-medium bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full border border-emerald-200"><CheckCircle2 size={12}/> Validado</span>;
+    case 'rejected': return <span className="flex items-center gap-1 text-[10px] font-medium bg-red-50 text-red-500 px-2 py-1 rounded-full border border-red-200"><XCircle size={12}/> Rechazado</span>;
+    default: return <span className="flex items-center gap-1 text-[10px] font-medium bg-yellow-50 text-yellow-600 px-2 py-1 rounded-full border border-yellow-200"><Clock size={12}/> Pendiente</span>;
+  }
+}
+
 export default function PaymentsPage() {
   const [paymentMethod, setPaymentMethod] = useState<"pago_movil" | "usd_cash">("pago_movil");
   const [amount, setAmount] = useState("");
   const [bcvRateInput, setBcvRateInput] = useState("");
-  const [bcvRateError, setBcvRateError] = useState("");
+  const [automaticBcvRate, setAutomaticBcvRate] = useState<number | null>(null);
+  const [bcvRateLoadFailed, setBcvRateLoadFailed] = useState(false);
   const [bcvRateLoading, setBcvRateLoading] = useState(false);
   const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -29,9 +51,9 @@ export default function PaymentsPage() {
   const [userName, setUserName] = useState<string>("Estudiante");
   const [userId, setUserId] = useState<string | null>(null);
   
-  const [payments, setPayments] = useState<any[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [nextMonthToPay, setNextMonthToPay] = useState<string>("");
-  const [selectedPayment, setSelectedPayment] = useState<any>(null);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const adminPhone = process.env.NEXT_PUBLIC_ADMIN_WHATSAPP_NUMBER || "584241520043"; 
@@ -42,16 +64,24 @@ export default function PaymentsPage() {
     let cancelled = false;
     const loadBcvRate = async () => {
       setBcvRateLoading(true);
-      setBcvRateError("");
+      setBcvRateLoadFailed(false);
       try {
         const response = await fetch("/api/bcv-rate", { cache: "no-store" });
+        if (!response.ok) throw new Error("BCV rate request failed");
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.toLowerCase().includes("application/json")) throw new Error("BCV rate response was not JSON");
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "No se pudo consultar la tasa BCV.");
-        if (!cancelled) setBcvRateInput(Number(payload.rate).toFixed(2));
-      } catch (error: any) {
+        const rate = Number(payload?.rate);
+        if (!Number.isFinite(rate) || rate <= 0) throw new Error("BCV rate was invalid");
         if (!cancelled) {
+          setAutomaticBcvRate(rate);
+          setBcvRateInput(rate.toFixed(2));
+        }
+      } catch {
+        if (!cancelled) {
+          setAutomaticBcvRate(null);
           setBcvRateInput("");
-          setBcvRateError(error.message || "No se pudo consultar la tasa BCV.");
+          setBcvRateLoadFailed(true);
         }
       } finally {
         if (!cancelled) setBcvRateLoading(false);
@@ -69,6 +99,26 @@ export default function PaymentsPage() {
     : null;
   const formatBs = (value: number) => value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const calculateNextMonth = (history: Payment[]) => {
+    const verifiedPayments = history.filter(p => p.status === 'verified');
+    
+    if (verifiedPayments.length === 0) { 
+      setNextMonthToPay(MONTH_NAMES[new Date().getMonth()]);
+      return;
+    }
+    
+    const lastPayment = verifiedPayments[0];
+    const concept = lastPayment.concept || "";
+    const matchedMonthIdx = MONTH_NAMES.findIndex(m => concept.includes(m));
+    
+    if (matchedMonthIdx !== -1) {
+      setNextMonthToPay(MONTH_NAMES[(matchedMonthIdx + 1) % 12]);
+    } else {
+      const lastDate = new Date(lastPayment.created_at);
+      setNextMonthToPay(MONTH_NAMES[(lastDate.getMonth() + 1) % 12]);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -83,30 +133,6 @@ export default function PaymentsPage() {
     };
     fetchData();
   }, []);
-
-  const calculateNextMonth = (history: any[]) => {
-    // Buscar el último pago aprobado
-    const verifiedPayments = history.filter(p => p.status === 'verified');
-    
-    if (verifiedPayments.length === 0) { 
-      setNextMonthToPay(MONTH_NAMES[new Date().getMonth()]); 
-      return; 
-    }
-    
-    const lastPayment = verifiedPayments[0];
-    const concept = lastPayment.concept || "";
-    
-    // Intentar buscar el mes en el concepto (ej: "Mensualidad Septiembre")
-    const matchedMonthIdx = MONTH_NAMES.findIndex(m => concept.includes(m));
-    
-    if (matchedMonthIdx !== -1) {
-      setNextMonthToPay(MONTH_NAMES[(matchedMonthIdx + 1) % 12]);
-    } else {
-      // Fallback a la fecha de creación
-      const lastDate = new Date(lastPayment.created_at);
-      setNextMonthToPay(MONTH_NAMES[(lastDate.getMonth() + 1) % 12]);
-    }
-  };
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -152,16 +178,11 @@ export default function PaymentsPage() {
       const text = `Hola, soy ${userName}. Acabo de reportar un pago.%0A%0A*Concepto:* ${conceptStr}%0A*Método:* ${methodLabel}%0A*Monto:* $${amount}${refText}%0A*Comprobante:* ${receiptUrl}`;
       window.open(`https://wa.me/${adminPhone}?text=${text}`, "_blank");
       setAmount(""); setReference(""); setFile(null);
-    } catch (error: any) { console.error(error); alert(error.message || "Hubo un error al procesar el pago."); }
-    finally { setLoading(false); }
-  };
-
-  const StatusBadge = ({ status }: { status: string }) => {
-    switch (status) {
-      case 'verified': return <span className="flex items-center gap-1 text-[10px] font-medium bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full border border-emerald-200"><CheckCircle2 size={12}/> Validado</span>;
-      case 'rejected': return <span className="flex items-center gap-1 text-[10px] font-medium bg-red-50 text-red-500 px-2 py-1 rounded-full border border-red-200"><XCircle size={12}/> Rechazado</span>;
-      default: return <span className="flex items-center gap-1 text-[10px] font-medium bg-yellow-50 text-yellow-600 px-2 py-1 rounded-full border border-yellow-200"><Clock size={12}/> Pendiente</span>;
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Hubo un error al procesar el pago.");
     }
+    finally { setLoading(false); }
   };
 
   const formatDate = (dateString: string) => {
@@ -238,10 +259,9 @@ export default function PaymentsPage() {
             <div className="flex flex-col gap-2 mt-1">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500">Tasa BCV</span>
-                <span className="font-semibold text-purple-600">{bcvRateLoading ? "Consultando..." : bcvRate > 0 ? `${bcvRate.toFixed(2)} Bs/$` : "No disponible"}</span>
+                <span className="font-semibold text-purple-600">{bcvRateLoading ? "Consultando..." : automaticBcvRate !== null ? `${automaticBcvRate.toFixed(2)} Bs/$` : "Ingresa una tasa"}</span>
               </div>
-              {bcvRateError && <p className="text-xs text-amber-600">{bcvRateError} Ingresa la tasa manualmente.</p>}
-              <input type="number" step="0.01" min="0.01" value={bcvRateInput} onChange={(e) => setBcvRateInput(e.target.value)} readOnly={!bcvRateError} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm read-only:bg-slate-50 read-only:text-slate-500" placeholder="Tasa manual (Bs/$)" aria-label="Tasa BCV" />
+              <input type="number" step="0.01" min="0.01" value={bcvRateInput} onChange={(e) => setBcvRateInput(e.target.value)} readOnly={!bcvRateLoadFailed} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm read-only:bg-slate-50 read-only:text-slate-500" placeholder="Tasa manual (Bs/$)" aria-label="Tasa BCV" />
               <label className="text-sm font-medium text-slate-700">Monto a transferir (Bs.)</label>
               <input type="text" value={amountBs === null ? "" : `${formatBs(amountBs)} Bs.`} readOnly className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-purple-900 font-semibold" placeholder="Se calcula automáticamente" aria-label="Monto a transferir en bolívares" />
             </div>
