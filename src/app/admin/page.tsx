@@ -296,9 +296,16 @@ export default function AdminPage() {
                   </div>
                   
                   <div className="flex justify-between text-sm items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <p><strong>Monto:</strong> {payment.amount_bs != null ? `${Number(payment.amount_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs. / ` : ''}${Number(payment.amount_usd ?? payment.amount).toFixed(2)} USD</p>
+                    <p><strong>Monto:</strong> ${Number(payment.amount_usd ?? payment.amount).toFixed(2)} USD</p>
                     <p><strong>Ref:</strong> {payment.reference || "Efectivo"}</p>
                   </div>
+
+                  {payment.receipt_url && (
+                    <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={payment.receipt_url} alt="Comprobante de pago" className="w-full max-h-80 object-contain" />
+                    </div>
+                  )}
 
                   {payment.status === 'pending' && (
                     <div className="flex gap-2 mt-1">
@@ -308,13 +315,6 @@ export default function AdminPage() {
                       <button onClick={() => handleUpdatePayment(payment.id, 'rejected', payment.profiles?.phone, payment.profiles?.full_name, payment.concept)} className="flex-1 bg-red-50 text-red-600 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 border border-red-200 hover:bg-red-100 transition-colors">
                         <XCircle size={16} /> Rechazar
                       </button>
-                    </div>
-                  )}
-                  {payment.receipt_url && (
-                    <div className="mt-2">
-                      <a href={payment.receipt_url} target="_blank" rel="noreferrer" className="text-xs text-purple-600 hover:underline flex items-center gap-1">
-                        <Search size={14}/> Ver comprobante
-                      </a>
                     </div>
                   )}
                 </div>

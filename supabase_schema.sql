@@ -74,7 +74,7 @@ CREATE TABLE public.figures (
 CREATE TABLE public.payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    amount NUMERIC NOT NULL,
+    amount NUMERIC,
     amount_usd NUMERIC(12, 2),
     amount_bs NUMERIC(12, 2),
     bcv_rate NUMERIC(12, 4),

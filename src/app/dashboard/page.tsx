@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Activity, CheckCircle2, DollarSign, MapPin, AlertCircle, Crown, Info, XCircle, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { MONTHLY_FEE } from "@/lib/constants";
 
 export default function DashboardPage() {
   const [userName, setUserName] = useState<string>("Rumbero");
@@ -192,7 +193,7 @@ export default function DashboardPage() {
           <DollarSign className="text-purple-500" size={20} />
           <div>
             <p className="text-xs text-slate-500">Mensualidad</p>
-            <p className="font-semibold text-sm text-slate-900">$10</p>
+            <p className="font-semibold text-sm text-slate-900">${MONTHLY_FEE} USD</p>
           </div>
         </div>
 

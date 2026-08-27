@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Upload, Send, Receipt, Copy, CheckCircle2, X, Clock, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { MONTHLY_FEE } from "@/lib/constants";
 
 const BANK_DETAILS = {
   bank: "Bancaribe",
@@ -20,11 +21,8 @@ type Payment = {
   status: string;
   concept?: string;
   created_at: string;
-  amount?: number;
   amount_usd?: number;
-  amount_bs?: number;
   payment_method?: string;
-  reference?: string;
   receipt_url?: string;
 };
 
@@ -38,13 +36,6 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function PaymentsPage() {
   const [paymentMethod, setPaymentMethod] = useState<"pago_movil" | "usd_cash">("pago_movil");
-  const [amount, setAmount] = useState("");
-  const [bcvRateInput, setBcvRateInput] = useState("");
-  const [bcvRate, setBcvRate] = useState<number | null>(null);
-  const [amountBs, setAmountBs] = useState<string | null>(null);
-  const [bcvRateLoadFailed, setBcvRateLoadFailed] = useState(false);
-  const [bcvRateLoading, setBcvRateLoading] = useState(false);
-  const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
   
   const [loading, setLoading] = useState(false);
@@ -58,52 +49,6 @@ export default function PaymentsPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const adminPhone = process.env.NEXT_PUBLIC_ADMIN_WHATSAPP_NUMBER || "584241520043"; 
-
-  useEffect(() => {
-    if (paymentMethod !== "pago_movil") return;
-
-    let cancelled = false;
-    const loadBcvRate = async () => {
-      setBcvRateLoading(true);
-      setBcvRateLoadFailed(false);
-      try {
-        const response = await fetch("/api/bcv-rate", { cache: "no-store" });
-        if (!response.ok) throw new Error("BCV rate request failed");
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.toLowerCase().includes("application/json")) throw new Error("BCV rate response was not JSON");
-        const payload = await response.json();
-        const rate = Number(payload?.rate);
-        if (!Number.isFinite(rate) || rate <= 0) throw new Error("BCV rate was invalid");
-        if (!cancelled) {
-          setBcvRate(rate);
-          setBcvRateInput(rate.toFixed(2));
-        }
-      } catch {
-        if (!cancelled) {
-          setBcvRate(null);
-          setBcvRateInput("");
-          setBcvRateLoadFailed(true);
-        }
-      } finally {
-        if (!cancelled) setBcvRateLoading(false);
-      }
-    };
-
-    loadBcvRate();
-    return () => { cancelled = true; };
-  }, [paymentMethod]);
-
-  const amountUsd = Number.parseFloat(amount.replace(",", "."));
-
-  useEffect(() => {
-    if (Number.isFinite(amountUsd) && amountUsd > 0 && bcvRate !== null && bcvRate > 0) {
-      setAmountBs((amountUsd * bcvRate).toFixed(2));
-    } else {
-      setAmountBs(null);
-    }
-  }, [amountUsd, bcvRate]);
-
-  const formatBs = (value: string | number) => Number(value).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const calculateNextMonth = (history: Payment[]) => {
     const verifiedPayments = history.filter(p => p.status === 'verified');
@@ -149,11 +94,6 @@ export default function PaymentsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) { alert("Debes adjuntar el comprobante o foto del dinero."); return; }
-    if (!Number.isFinite(amountUsd) || amountUsd <= 0) { alert("Ingresa un monto válido en USD."); return; }
-    if (paymentMethod === "pago_movil" && (bcvRate === null || bcvRate <= 0 || amountBs === null)) {
-      alert("Ingresa una tasa BCV válida para calcular el monto en Bs.");
-      return;
-    }
     setLoading(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -167,12 +107,9 @@ export default function PaymentsPage() {
       let newPayment = null;
       if (userId) {
         const { data, error: dbError } = await supabase.from('payments').insert({
-          user_id: userId, amount: amountUsd, amount_usd: amountUsd,
-          amount_bs: paymentMethod === "pago_movil" ? Number(amountBs) : null,
-          bcv_rate: paymentMethod === "pago_movil" ? Number(bcvRate.toFixed(2)) : null,
+          user_id: userId, amount_usd: MONTHLY_FEE,
           payment_method: paymentMethod,
-          reference: paymentMethod === "pago_movil" ? reference : null, status: 'pending',
-          receipt_url: receiptUrl, concept: conceptStr
+          receipt_url: receiptUrl, status: 'pending'
         }).select().single();
         if (dbError) throw new Error("Error guardando el pago: " + dbError.message);
         newPayment = data;
@@ -180,10 +117,9 @@ export default function PaymentsPage() {
       if (newPayment) { const updated = [newPayment, ...payments]; setPayments(updated); calculateNextMonth(updated); }
 
       const methodLabel = paymentMethod === "pago_movil" ? "Pago Móvil" : "USD Efectivo";
-      const refText = paymentMethod === "pago_movil" ? `%0A*Referencia:* ${reference}` : "";
-      const text = `Hola, soy ${userName}. Acabo de reportar un pago.%0A%0A*Concepto:* ${conceptStr}%0A*Método:* ${methodLabel}%0A*Monto:* $${amount}${refText}%0A*Comprobante:* ${receiptUrl}`;
+      const text = `Hola, soy ${userName}. Acabo de reportar un pago.%0A%0A*Concepto:* ${conceptStr}%0A*Método:* ${methodLabel}%0A*Monto:* $${MONTHLY_FEE}%0A*Comprobante:* ${receiptUrl}`;
       window.open(`https://wa.me/${adminPhone}?text=${text}`, "_blank");
-      setAmount(""); setReference(""); setFile(null);
+      setFile(null);
     } catch (error) {
       console.error(error);
       alert(error instanceof Error ? error.message : "Hubo un error al procesar el pago.");
@@ -254,38 +190,15 @@ export default function PaymentsPage() {
             {file ? file.name : (paymentMethod === "pago_movil" ? "Subir captura del comprobante" : "Subir foto del dinero")}
           </p>
           <p className="text-xs text-slate-400">JPG, PNG o PDF (Max. 5MB)</p>
-          <input type="file" accept="image/*,.pdf" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         </div>
 
-        {/* Monto */}
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-slate-700">Monto Pagado (USD)</label>
-          <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm" placeholder="Ej. 20" required min="0.01" />
-          {paymentMethod === "pago_movil" && (
-            <div className="flex flex-col gap-2 mt-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Tasa BCV</span>
-                <span className="font-semibold text-purple-600">{bcvRateLoading ? "Consultando..." : bcvRate !== null ? `${bcvRate.toFixed(2)} Bs/$` : "Ingresa una tasa"}</span>
-              </div>
-              <input type="number" step="0.01" min="0.01" value={bcvRateInput} onChange={(e) => { const value = e.target.value; setBcvRateInput(value); setBcvRate(Number.parseFloat(value.replace(",", ".")) || null); }} readOnly={!bcvRateLoadFailed} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm read-only:bg-slate-50 read-only:text-slate-500" placeholder="Tasa manual (Bs/$)" aria-label="Tasa BCV" />
-              <label className="text-sm font-medium text-slate-700">Monto a transferir (Bs.)</label>
-              <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-purple-900 font-semibold" aria-live="polite">
-                Tasa oficial BCV: {bcvRate === null ? "--" : `${bcvRate.toFixed(2)} Bs/$`} | Total a pagar: {amountBs === null ? "--" : `${formatBs(amountBs)} Bs.`}
-              </div>
-              <input type="text" value={amountBs === null ? "" : `${formatBs(amountBs)} Bs.`} readOnly className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-purple-900 font-semibold" placeholder="Se calcula automáticamente" aria-label="Monto a transferir en bolívares" />
-            </div>
-          )}
+        <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl text-center">
+          <p className="text-xs text-purple-600">Mensualidad fija</p>
+          <p className="text-xl font-bold text-purple-900">${MONTHLY_FEE} USD</p>
         </div>
 
-        {/* Referencia */}
-        {paymentMethod === "pago_movil" && (
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-slate-700">Número de Referencia</label>
-            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm" placeholder="Ej. 5678" required={paymentMethod === "pago_movil"} />
-          </div>
-        )}
-
-        <button type="submit" disabled={loading || !amount || (paymentMethod === "pago_movil" && !reference) || !file} className="mt-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-4 rounded-2xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-neon">
+        <button type="submit" disabled={loading || !file} className="mt-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-4 rounded-2xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-neon">
           <Send size={20} />
           {loading ? "Procesando..." : "Enviar por WhatsApp"}
         </button>
@@ -334,10 +247,9 @@ export default function PaymentsPage() {
                 <StatusBadge status={selectedPayment.status} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-xs text-slate-400 mb-1">Monto</p><p className="font-semibold text-purple-600">${selectedPayment.amount_usd ?? selectedPayment.amount}</p>{selectedPayment.amount_bs != null && <p className="text-xs text-slate-500">{formatBs(Number(selectedPayment.amount_bs))} Bs.</p>}</div>
+                <div><p className="text-xs text-slate-400 mb-1">Monto</p><p className="font-semibold text-purple-600">${selectedPayment.amount_usd ?? MONTHLY_FEE} USD</p></div>
                 <div><p className="text-xs text-slate-400 mb-1">Método</p><p className="font-medium text-sm text-slate-900">{selectedPayment.payment_method === 'usd_cash' ? 'USD Efectivo' : 'Pago Móvil'}</p></div>
               </div>
-              {selectedPayment.reference && (<div><p className="text-xs text-slate-400 mb-1">Referencia</p><p className="font-medium text-sm text-slate-900">{selectedPayment.reference}</p></div>)}
               <div>
                 <p className="text-xs text-slate-400 mb-2">Comprobante / Foto</p>
                 {selectedPayment.receipt_url ? (

@@ -3,6 +3,7 @@
 
 -- Si ya ejecutaste update_payments_table.sql anterior, solo necesitas:
 ALTER TABLE public.payments
+	ALTER COLUMN amount DROP NOT NULL,
 	ADD COLUMN IF NOT EXISTS payment_method TEXT CHECK (payment_method IN ('pago_movil', 'usd_cash')) DEFAULT 'pago_movil',
 	ADD COLUMN IF NOT EXISTS reference TEXT,
 	ADD COLUMN IF NOT EXISTS concept TEXT,
