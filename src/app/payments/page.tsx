@@ -3,13 +3,7 @@
 import { useState, useEffect } from "react";
 import { Upload, Send, Receipt, Copy, CheckCircle2, X, Clock, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { MONTHLY_FEE } from "@/lib/constants";
-
-const BANK_DETAILS = {
-  bank: "Bancaribe",
-  id: "V-22774670",
-  phone: "04241520043",
-};
+import { BANK_DETAILS, MONTHLY_FEE } from "@/lib/constants";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
