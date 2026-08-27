@@ -9,10 +9,14 @@ export const metadata: Metadata = {
   title: "Familia Rumbera",
   description: "PWA para gestión de academia de Salsa Casino",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logo-familia-rumbera.png",
+    apple: "/logo-familia-rumbera.png",
+  },
 };
 
 export const viewport = {
-  themeColor: "#F8FAFC",
+  themeColor: "#000000",
 };
 
 export default function RootLayout({

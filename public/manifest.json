@@ -1,0 +1,22 @@
+{
+  "name": "Familia Rumbera",
+  "short_name": "Familia Rumbera",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/logo-familia-rumbera.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-familia-rumbera.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
