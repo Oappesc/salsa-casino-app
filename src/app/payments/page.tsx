@@ -40,7 +40,8 @@ export default function PaymentsPage() {
   const [paymentMethod, setPaymentMethod] = useState<"pago_movil" | "usd_cash">("pago_movil");
   const [amount, setAmount] = useState("");
   const [bcvRateInput, setBcvRateInput] = useState("");
-  const [automaticBcvRate, setAutomaticBcvRate] = useState<number | null>(null);
+  const [bcvRate, setBcvRate] = useState<number | null>(null);
+  const [amountBs, setAmountBs] = useState<string | null>(null);
   const [bcvRateLoadFailed, setBcvRateLoadFailed] = useState(false);
   const [bcvRateLoading, setBcvRateLoading] = useState(false);
   const [reference, setReference] = useState("");
@@ -74,12 +75,12 @@ export default function PaymentsPage() {
         const rate = Number(payload?.rate);
         if (!Number.isFinite(rate) || rate <= 0) throw new Error("BCV rate was invalid");
         if (!cancelled) {
-          setAutomaticBcvRate(rate);
+          setBcvRate(rate);
           setBcvRateInput(rate.toFixed(2));
         }
       } catch {
         if (!cancelled) {
-          setAutomaticBcvRate(null);
+          setBcvRate(null);
           setBcvRateInput("");
           setBcvRateLoadFailed(true);
         }
@@ -92,12 +93,17 @@ export default function PaymentsPage() {
     return () => { cancelled = true; };
   }, [paymentMethod]);
 
-  const bcvRate = Number.parseFloat(bcvRateInput.replace(",", "."));
   const amountUsd = Number.parseFloat(amount.replace(",", "."));
-  const amountBs = Number.isFinite(amountUsd) && Number.isFinite(bcvRate) && bcvRate > 0
-    ? amountUsd * bcvRate
-    : null;
-  const formatBs = (value: number) => value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  useEffect(() => {
+    if (Number.isFinite(amountUsd) && amountUsd > 0 && bcvRate !== null && bcvRate > 0) {
+      setAmountBs((amountUsd * bcvRate).toFixed(2));
+    } else {
+      setAmountBs(null);
+    }
+  }, [amountUsd, bcvRate]);
+
+  const formatBs = (value: string | number) => Number(value).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const calculateNextMonth = (history: Payment[]) => {
     const verifiedPayments = history.filter(p => p.status === 'verified');
@@ -144,7 +150,7 @@ export default function PaymentsPage() {
     e.preventDefault();
     if (!file) { alert("Debes adjuntar el comprobante o foto del dinero."); return; }
     if (!Number.isFinite(amountUsd) || amountUsd <= 0) { alert("Ingresa un monto válido en USD."); return; }
-    if (paymentMethod === "pago_movil" && (!Number.isFinite(bcvRate) || bcvRate <= 0 || amountBs === null)) {
+    if (paymentMethod === "pago_movil" && (bcvRate === null || bcvRate <= 0 || amountBs === null)) {
       alert("Ingresa una tasa BCV válida para calcular el monto en Bs.");
       return;
     }
@@ -162,7 +168,7 @@ export default function PaymentsPage() {
       if (userId) {
         const { data, error: dbError } = await supabase.from('payments').insert({
           user_id: userId, amount: amountUsd, amount_usd: amountUsd,
-          amount_bs: paymentMethod === "pago_movil" ? Number(amountBs?.toFixed(2)) : null,
+          amount_bs: paymentMethod === "pago_movil" ? Number(amountBs) : null,
           bcv_rate: paymentMethod === "pago_movil" ? Number(bcvRate.toFixed(2)) : null,
           payment_method: paymentMethod,
           reference: paymentMethod === "pago_movil" ? reference : null, status: 'pending',
@@ -259,10 +265,13 @@ export default function PaymentsPage() {
             <div className="flex flex-col gap-2 mt-1">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-500">Tasa BCV</span>
-                <span className="font-semibold text-purple-600">{bcvRateLoading ? "Consultando..." : automaticBcvRate !== null ? `${automaticBcvRate.toFixed(2)} Bs/$` : "Ingresa una tasa"}</span>
+                <span className="font-semibold text-purple-600">{bcvRateLoading ? "Consultando..." : bcvRate !== null ? `${bcvRate.toFixed(2)} Bs/$` : "Ingresa una tasa"}</span>
               </div>
-              <input type="number" step="0.01" min="0.01" value={bcvRateInput} onChange={(e) => setBcvRateInput(e.target.value)} readOnly={!bcvRateLoadFailed} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm read-only:bg-slate-50 read-only:text-slate-500" placeholder="Tasa manual (Bs/$)" aria-label="Tasa BCV" />
+              <input type="number" step="0.01" min="0.01" value={bcvRateInput} onChange={(e) => { const value = e.target.value; setBcvRateInput(value); setBcvRate(Number.parseFloat(value.replace(",", ".")) || null); }} readOnly={!bcvRateLoadFailed} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm read-only:bg-slate-50 read-only:text-slate-500" placeholder="Tasa manual (Bs/$)" aria-label="Tasa BCV" />
               <label className="text-sm font-medium text-slate-700">Monto a transferir (Bs.)</label>
+              <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-purple-900 font-semibold" aria-live="polite">
+                Tasa oficial BCV: {bcvRate === null ? "--" : `${bcvRate.toFixed(2)} Bs/$`} | Total a pagar: {amountBs === null ? "--" : `${formatBs(amountBs)} Bs.`}
+              </div>
               <input type="text" value={amountBs === null ? "" : `${formatBs(amountBs)} Bs.`} readOnly className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-purple-900 font-semibold" placeholder="Se calcula automáticamente" aria-label="Monto a transferir en bolívares" />
             </div>
           )}
