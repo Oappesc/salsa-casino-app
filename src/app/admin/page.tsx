@@ -296,7 +296,7 @@ export default function AdminPage() {
                   </div>
                   
                   <div className="flex justify-between text-sm items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    <p><strong>Monto:</strong> ${payment.amount}</p>
+                    <p><strong>Monto:</strong> {payment.amount_bs != null ? `${Number(payment.amount_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs. / ` : ''}${Number(payment.amount_usd ?? payment.amount).toFixed(2)} USD</p>
                     <p><strong>Ref:</strong> {payment.reference || "Efectivo"}</p>
                   </div>
 

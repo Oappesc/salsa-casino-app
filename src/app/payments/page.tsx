@@ -18,6 +18,9 @@ const MONTH_NAMES = [
 export default function PaymentsPage() {
   const [paymentMethod, setPaymentMethod] = useState<"pago_movil" | "usd_cash">("pago_movil");
   const [amount, setAmount] = useState("");
+  const [bcvRateInput, setBcvRateInput] = useState("");
+  const [bcvRateError, setBcvRateError] = useState("");
+  const [bcvRateLoading, setBcvRateLoading] = useState(false);
   const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
   
@@ -32,6 +35,39 @@ export default function PaymentsPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const adminPhone = process.env.NEXT_PUBLIC_ADMIN_WHATSAPP_NUMBER || "584241520043"; 
+
+  useEffect(() => {
+    if (paymentMethod !== "pago_movil") return;
+
+    let cancelled = false;
+    const loadBcvRate = async () => {
+      setBcvRateLoading(true);
+      setBcvRateError("");
+      try {
+        const response = await fetch("/api/bcv-rate", { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "No se pudo consultar la tasa BCV.");
+        if (!cancelled) setBcvRateInput(Number(payload.rate).toFixed(2));
+      } catch (error: any) {
+        if (!cancelled) {
+          setBcvRateInput("");
+          setBcvRateError(error.message || "No se pudo consultar la tasa BCV.");
+        }
+      } finally {
+        if (!cancelled) setBcvRateLoading(false);
+      }
+    };
+
+    loadBcvRate();
+    return () => { cancelled = true; };
+  }, [paymentMethod]);
+
+  const bcvRate = Number.parseFloat(bcvRateInput.replace(",", "."));
+  const amountUsd = Number.parseFloat(amount.replace(",", "."));
+  const amountBs = Number.isFinite(amountUsd) && Number.isFinite(bcvRate) && bcvRate > 0
+    ? amountUsd * bcvRate
+    : null;
+  const formatBs = (value: number) => value.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,6 +117,11 @@ export default function PaymentsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) { alert("Debes adjuntar el comprobante o foto del dinero."); return; }
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) { alert("Ingresa un monto válido en USD."); return; }
+    if (paymentMethod === "pago_movil" && (!Number.isFinite(bcvRate) || bcvRate <= 0 || amountBs === null)) {
+      alert("Ingresa una tasa BCV válida para calcular el monto en Bs.");
+      return;
+    }
     setLoading(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -94,7 +135,10 @@ export default function PaymentsPage() {
       let newPayment = null;
       if (userId) {
         const { data, error: dbError } = await supabase.from('payments').insert({
-          user_id: userId, amount: parseFloat(amount), payment_method: paymentMethod,
+          user_id: userId, amount: amountUsd, amount_usd: amountUsd,
+          amount_bs: paymentMethod === "pago_movil" ? Number(amountBs?.toFixed(2)) : null,
+          bcv_rate: paymentMethod === "pago_movil" ? Number(bcvRate.toFixed(2)) : null,
+          payment_method: paymentMethod,
           reference: paymentMethod === "pago_movil" ? reference : null, status: 'pending',
           receipt_url: receiptUrl, concept: conceptStr
         }).select().single();
@@ -188,8 +232,20 @@ export default function PaymentsPage() {
 
         {/* Monto */}
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-slate-700">Monto Pagado ($)</label>
-          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm" placeholder="Ej. 10" required min="1" />
+          <label className="text-sm font-medium text-slate-700">Monto Pagado (USD)</label>
+          <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm" placeholder="Ej. 20" required min="0.01" />
+          {paymentMethod === "pago_movil" && (
+            <div className="flex flex-col gap-2 mt-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Tasa BCV</span>
+                <span className="font-semibold text-purple-600">{bcvRateLoading ? "Consultando..." : bcvRate > 0 ? `${bcvRate.toFixed(2)} Bs/$` : "No disponible"}</span>
+              </div>
+              {bcvRateError && <p className="text-xs text-amber-600">{bcvRateError} Ingresa la tasa manualmente.</p>}
+              <input type="number" step="0.01" min="0.01" value={bcvRateInput} onChange={(e) => setBcvRateInput(e.target.value)} readOnly={!bcvRateError} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm read-only:bg-slate-50 read-only:text-slate-500" placeholder="Tasa manual (Bs/$)" aria-label="Tasa BCV" />
+              <label className="text-sm font-medium text-slate-700">Monto a transferir (Bs.)</label>
+              <input type="text" value={amountBs === null ? "" : `${formatBs(amountBs)} Bs.`} readOnly className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-purple-900 font-semibold" placeholder="Se calcula automáticamente" aria-label="Monto a transferir en bolívares" />
+            </div>
+          )}
         </div>
 
         {/* Referencia */}
@@ -249,7 +305,7 @@ export default function PaymentsPage() {
                 <StatusBadge status={selectedPayment.status} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-xs text-slate-400 mb-1">Monto</p><p className="font-semibold text-purple-600">${selectedPayment.amount}</p></div>
+                <div><p className="text-xs text-slate-400 mb-1">Monto</p><p className="font-semibold text-purple-600">${selectedPayment.amount_usd ?? selectedPayment.amount}</p>{selectedPayment.amount_bs != null && <p className="text-xs text-slate-500">{formatBs(Number(selectedPayment.amount_bs))} Bs.</p>}</div>
                 <div><p className="text-xs text-slate-400 mb-1">Método</p><p className="font-medium text-sm text-slate-900">{selectedPayment.payment_method === 'usd_cash' ? 'USD Efectivo' : 'Pago Móvil'}</p></div>
               </div>
               {selectedPayment.reference && (<div><p className="text-xs text-slate-400 mb-1">Referencia</p><p className="font-medium text-sm text-slate-900">{selectedPayment.reference}</p></div>)}
