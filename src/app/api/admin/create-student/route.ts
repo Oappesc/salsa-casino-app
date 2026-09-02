@@ -59,7 +59,6 @@ export async function POST(request: Request) {
       .upsert({
         id: newUserId,
         full_name,
-        email,
         phone: phone || null,
         birthday: birthday || null,
         sublevel: sublevel || 'Básico I',
