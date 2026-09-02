@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { CheckCircle2, XCircle, Search, MessageCircle, MapPin, UserCheck, ShieldAlert, Users, CalendarCheck, FileText, Clock, PlusCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Search, MessageCircle, MapPin, UserCheck, ShieldAlert, Users, CalendarCheck, FileText, Clock, PlusCircle, Trash2, X, UserPlus } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -18,6 +18,11 @@ export default function AdminPage() {
   // Students State
   const [students, setStudents] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creatingStudent, setCreatingStudent] = useState(false);
+  const [newStudent, setNewStudent] = useState({
+    full_name: "", email: "", password: "", phone: "", birthday: "", sublevel: "Básico I", role: "student"
+  });
 
   // Classes State
   const [classMode, setClassMode] = useState<"list" | "create" | "attendance">("list");
@@ -127,6 +132,55 @@ export default function AdminPage() {
     await supabase.from('profiles').update({ sublevel, status }).eq('id', studentId);
     alert("Estudiante actualizado");
     loadStudents();
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingStudent(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/create-student', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify(newStudent),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+
+      setStudents(prev => [...prev, result.student].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')));
+      setShowCreateModal(false);
+      setNewStudent({ full_name: "", email: "", password: "", phone: "", birthday: "", sublevel: "Básico I", role: "student" });
+      alert("✅ Estudiante creado exitosamente.");
+    } catch (err: any) {
+      alert("⚠️ Error al crear estudiante: " + err.message);
+    } finally {
+      setCreatingStudent(false);
+    }
+  };
+
+  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+    if (!confirm(`¿Estás seguro de eliminar a "${studentName}"?\n\nSe borrará su cuenta, historial de pagos y asistencias. Esta acción no se puede deshacer.`)) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/delete-student', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ studentId }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+      alert("✅ Estudiante eliminado correctamente.");
+    } catch (err: any) {
+      alert("⚠️ Error al eliminar estudiante: " + err.message);
+    }
   };
 
   // ====== LÓGICA DE CLASES ====== //
@@ -447,7 +501,12 @@ export default function AdminPage() {
       {/* TAB 3: ALUMNOS */}
       {activeTab === "alumnos" && (
         <div className="flex flex-col gap-4">
-          <h2 className="font-semibold text-slate-900 mb-2">Gestión de Alumnos</h2>
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="font-semibold text-slate-900">Gestión de Alumnos</h2>
+            <button onClick={() => setShowCreateModal(true)} className="text-xs font-semibold bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full flex items-center gap-1">
+              <UserPlus size={14}/> Agregar Estudiante
+            </button>
+          </div>
           
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -506,9 +565,79 @@ export default function AdminPage() {
                   <a href={`https://wa.me/${formatWhatsappNumber(student.phone)}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-semibold transition-colors">
                     <MessageCircle size={14} /> WhatsApp
                   </a>
+                  <button 
+                    onClick={() => handleDeleteStudent(student.id, student.full_name)}
+                    className="bg-red-50 hover:bg-red-100 text-red-600 py-2 px-4 rounded-lg flex items-center justify-center gap-1 text-xs font-semibold transition-colors"
+                  >
+                    <Trash2 size={14} /> Eliminar
+                  </button>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Crear Estudiante */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2"><UserPlus size={20} className="text-purple-600" /> Nuevo Estudiante</h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600"><X size={22} /></button>
+            </div>
+            
+            <form onSubmit={handleCreateStudent} className="p-5 flex flex-col gap-3 max-h-[70vh] overflow-y-auto">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Nombre completo *</label>
+                <input type="text" required value={newStudent.full_name} onChange={e => setNewStudent({...newStudent, full_name: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="Ej: María García" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Correo electrónico *</label>
+                <input type="email" required value={newStudent.email} onChange={e => setNewStudent({...newStudent, email: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="correo@ejemplo.com" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Contraseña inicial * (mín. 6 caracteres)</label>
+                <input type="password" required minLength={6} value={newStudent.password} onChange={e => setNewStudent({...newStudent, password: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="••••••" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Teléfono</label>
+                  <input type="tel" value={newStudent.phone} onChange={e => setNewStudent({...newStudent, phone: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="04241234567" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Fecha de Nacimiento</label>
+                  <input type="date" value={newStudent.birthday} onChange={e => setNewStudent({...newStudent, birthday: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Nivel</label>
+                  <select value={newStudent.sublevel} onChange={e => setNewStudent({...newStudent, sublevel: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50">
+                    <option value="Básico I">Básico I</option>
+                    <option value="Básico II">Básico II</option>
+                    <option value="Básico III">Básico III</option>
+                    <option value="Intermedio I">Intermedio I</option>
+                    <option value="Intermedio II">Intermedio II</option>
+                    <option value="Avanzado">Avanzado</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Rol</label>
+                  <select value={newStudent.role} onChange={e => setNewStudent({...newStudent, role: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50">
+                    <option value="student">Estudiante</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-3">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-lg text-sm font-semibold">Cancelar</button>
+                <button type="submit" disabled={creatingStudent} className="flex-1 bg-purple-600 text-white py-2.5 rounded-lg text-sm font-semibold shadow-neon-sm disabled:opacity-50">
+                  {creatingStudent ? "Creando..." : "Crear Estudiante"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
