@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Activity, CheckCircle2, DollarSign, MapPin, AlertCircle, Crown, Info, XCircle, Clock } from "lucide-react";
 import Image from "next/image";
@@ -8,6 +9,7 @@ import Link from "next/link";
 import { MONTHLY_FEE } from "@/lib/constants";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [userName, setUserName] = useState<string>("Rumbero");
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -52,9 +54,14 @@ export default function DashboardPage() {
           .single();
           
         if (profile) {
+          if (profile.role === 'admin') {
+            router.push('/admin/classes');
+            return;
+          }
+
           setCurrentLevel(profile.sublevel || "Básico I");
           setAccountStatus(profile.status || "Activo");
-          if (profile.role === 'admin') setIsAdmin(true);
+          setIsAdmin(false);
           
           if (profile.groups) {
             const group = profile.groups as any;
@@ -102,7 +109,7 @@ export default function DashboardPage() {
       setLoading(false);
     };
     getUserData();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     // Calculate percentage based on selected month
@@ -145,11 +152,6 @@ export default function DashboardPage() {
           </h2>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && (
-            <Link href="/admin" className="bg-amber-100 text-amber-600 p-2.5 rounded-full shadow-sm hover:bg-amber-200 transition-colors">
-              <Crown size={20} />
-            </Link>
-          )}
           <div className="rounded-full shadow-neon-sm overflow-hidden border-2 border-purple-100 flex items-center justify-center bg-white w-12 h-12 shrink-0">
             <Image 
               src="/logo-familia-rumbera.png" 
