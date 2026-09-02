@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { CheckCircle2, XCircle, Search, MessageCircle, MapPin, UserCheck, ShieldAlert, Users, CalendarCheck, FileText, Clock, PlusCircle, Trash2, X, UserPlus } from "lucide-react";
+import { CheckCircle2, XCircle, Search, MessageCircle, MapPin, UserCheck, ShieldAlert, Users, CalendarCheck, FileText, Clock, PlusCircle, Trash2, X, UserPlus, CreditCard, TrendingUp, CalendarDays } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -23,6 +23,8 @@ export default function AdminPage() {
   const [newStudent, setNewStudent] = useState({
     full_name: "", email: "", password: "", phone: "", birthday: "", sublevel: "Básico I", role: "student"
   });
+  const [selectedStudentProfile, setSelectedStudentProfile] = useState<any>(null);
+  const [studentDetails, setStudentDetails] = useState({ payments: [] as any[], attendances: [] as any[], loading: false });
 
   // Classes State
   const [classMode, setClassMode] = useState<"list" | "create" | "attendance">("list");
@@ -181,6 +183,22 @@ export default function AdminPage() {
     } catch (err: any) {
       alert("⚠️ Error al eliminar estudiante: " + err.message);
     }
+  };
+
+  const handleOpenStudentModal = async (student: any) => {
+    setSelectedStudentProfile(student);
+    setStudentDetails({ payments: [], attendances: [], loading: true });
+    
+    const [payRes, attRes] = await Promise.all([
+      supabase.from('payments').select('*').eq('user_id', student.id).order('created_at', { ascending: false }),
+      supabase.from('attendances').select('*, classes(date)').eq('user_id', student.id)
+    ]);
+
+    setStudentDetails({
+      payments: payRes.data || [],
+      attendances: attRes.data || [],
+      loading: false
+    });
   };
 
   // ====== LÓGICA DE CLASES ====== //
@@ -521,7 +539,7 @@ export default function AdminPage() {
 
           <div className="flex flex-col gap-3 mt-2">
             {filteredStudents.map(student => (
-              <div key={student.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
+              <div key={student.id} onClick={() => handleOpenStudentModal(student)} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 cursor-pointer hover:border-purple-300 transition-colors">
                 <div>
                   <p className="font-bold text-slate-900 flex justify-between">
                     {student.full_name}
@@ -536,6 +554,7 @@ export default function AdminPage() {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-semibold text-slate-400 uppercase">Nivel</label>
                     <select 
+                      onClick={(e) => e.stopPropagation()}
                       value={student.sublevel || "Básico I"}
                       onChange={(e) => handleUpdateStudent(student.id, e.target.value, student.status)}
                       className="text-xs bg-slate-50 border border-slate-200 rounded p-1.5"
@@ -551,6 +570,7 @@ export default function AdminPage() {
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-semibold text-slate-400 uppercase">Estatus</label>
                     <select 
+                      onClick={(e) => e.stopPropagation()}
                       value={student.status || "Activo"}
                       onChange={(e) => handleUpdateStudent(student.id, student.sublevel, e.target.value)}
                       className="text-xs bg-slate-50 border border-slate-200 rounded p-1.5"
@@ -562,11 +582,11 @@ export default function AdminPage() {
                 </div>
                 
                 <div className="pt-2 border-t border-slate-100 flex gap-2">
-                  <a href={`https://wa.me/${formatWhatsappNumber(student.phone)}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-semibold transition-colors">
+                  <a href={`https://wa.me/${formatWhatsappNumber(student.phone)}`} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 py-2 rounded-lg flex items-center justify-center gap-1 text-xs font-semibold transition-colors">
                     <MessageCircle size={14} /> WhatsApp
                   </a>
                   <button 
-                    onClick={() => handleDeleteStudent(student.id, student.full_name)}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id, student.full_name); }}
                     className="bg-red-50 hover:bg-red-100 text-red-600 py-2 px-4 rounded-lg flex items-center justify-center gap-1 text-xs font-semibold transition-colors"
                   >
                     <Trash2 size={14} /> Eliminar
@@ -638,6 +658,116 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL: Perfil del Estudiante */}
+      {selectedStudentProfile && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={() => setSelectedStudentProfile(null)}>
+          <div className="bg-slate-50 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:fade-in flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Header */}
+            <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
+              <h3 className="font-bold text-slate-900">Perfil del Estudiante</h3>
+              <button onClick={() => setSelectedStudentProfile(null)} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full"><X size={18} /></button>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto p-5 flex flex-col gap-4">
+              
+              {/* Info Básica */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="font-bold text-lg text-slate-900">{selectedStudentProfile.full_name}</h4>
+                <div className="flex flex-col gap-1 mt-2">
+                  <p className="text-sm text-slate-600 flex items-center gap-2"><MapPin size={14} className="text-slate-400"/> {selectedStudentProfile.sublevel || 'N/A'}</p>
+                  <p className="text-sm text-slate-600 flex items-center gap-2"><MessageCircle size={14} className="text-slate-400"/> {selectedStudentProfile.phone || 'Sin teléfono'}</p>
+                  {selectedStudentProfile.birthday && (
+                    <p className="text-sm text-slate-600 flex items-center gap-2"><CalendarDays size={14} className="text-slate-400"/> {new Date(selectedStudentProfile.birthday).toLocaleDateString('es-ES')}</p>
+                  )}
+                </div>
+              </div>
+
+              {studentDetails.loading ? (
+                <p className="text-center text-sm text-slate-500 py-4 animate-pulse">Cargando detalles...</p>
+              ) : (
+                <>
+                  {/* Status de Pago */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1"><CreditCard size={14}/> Estado de Pago</h5>
+                    {(() => {
+                      const currentMonthIndex = new Date().getMonth();
+                      const currentYear = new Date().getFullYear();
+                      const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                      
+                      const hasPaid = studentDetails.payments.some(p => {
+                        if (p.status !== 'verified') return false;
+                        const createdDate = new Date(p.created_at);
+                        return (createdDate.getMonth() === currentMonthIndex && createdDate.getFullYear() === currentYear) || 
+                               (p.concept?.toLowerCase().includes(MONTH_NAMES[currentMonthIndex].toLowerCase()));
+                      });
+
+                      return hasPaid ? (
+                        <div className="bg-emerald-50 text-emerald-700 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
+                          <CheckCircle2 size={18} className="text-emerald-500" />
+                          <span className="font-semibold text-sm">Al día ({MONTH_NAMES[currentMonthIndex]})</span>
+                        </div>
+                      ) : (
+                        <div className="bg-red-50 text-red-700 border border-red-100 p-3 rounded-xl flex items-center gap-2">
+                          <ShieldAlert size={18} className="text-red-500" />
+                          <span className="font-semibold text-sm">Pendiente / Deudor</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Asistencia */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1"><TrendingUp size={14}/> Asistencia (Histórica)</h5>
+                    {(() => {
+                      const past = studentDetails.attendances.filter(a => a.classes?.date && new Date(a.classes.date + 'T12:00:00') <= new Date());
+                      const attended = past.filter(a => a.status === 'attended').length;
+                      const percent = past.length > 0 ? Math.round((attended / past.length) * 100) : 0;
+                      
+                      return (
+                        <div>
+                          <div className="flex justify-between items-end mb-1">
+                            <span className="text-2xl font-bold text-slate-900">{percent}%</span>
+                            <span className="text-xs text-slate-500 font-medium mb-1">{attended} de {past.length} clases</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${percent >= 75 ? 'bg-emerald-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} 
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  
+                  {/* Cambio rápido de Nivel */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Cambiar Nivel</h5>
+                    <select 
+                      value={selectedStudentProfile.sublevel || "Básico I"}
+                      onChange={(e) => {
+                        handleUpdateStudent(selectedStudentProfile.id, e.target.value, selectedStudentProfile.status);
+                        setSelectedStudentProfile({...selectedStudentProfile, sublevel: e.target.value});
+                      }}
+                      className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="Básico I">Básico I</option>
+                      <option value="Básico II">Básico II</option>
+                      <option value="Básico III">Básico III</option>
+                      <option value="Intermedio I">Intermedio I</option>
+                      <option value="Intermedio II">Intermedio II</option>
+                      <option value="Avanzado">Avanzado</option>
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+            
           </div>
         </div>
       )}
