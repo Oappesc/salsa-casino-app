@@ -101,9 +101,13 @@ export default function PaymentsPage() {
       let newPayment = null;
       if (userId) {
         const { data, error: dbError } = await supabase.from('payments').insert({
-          user_id: userId, amount_usd: MONTHLY_FEE,
+          user_id: userId, 
+          amount: MONTHLY_FEE,
+          amount_usd: MONTHLY_FEE,
+          concept: conceptStr,
           payment_method: paymentMethod,
-          receipt_url: receiptUrl, status: 'pending'
+          receipt_url: receiptUrl, 
+          status: 'pending'
         }).select().single();
         if (dbError) throw new Error("Error guardando el pago: " + dbError.message);
         newPayment = data;
