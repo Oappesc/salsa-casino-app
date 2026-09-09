@@ -4,14 +4,20 @@ import { createClient } from '@supabase/supabase-js'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { full_name, email, password, phone, birthday, sublevel, role } = body
+    const { full_name, phone, birthday, sublevel } = body
 
-    if (!full_name || !email || !password) {
-      return Response.json({ error: 'Nombre, correo y contraseña son obligatorios.' }, { status: 400 })
+    if (!full_name || !phone) {
+      return Response.json({ error: 'Nombre y teléfono son obligatorios.' }, { status: 400 })
     }
-    if (password.length < 6) {
-      return Response.json({ error: 'La contraseña debe tener al menos 6 caracteres.' }, { status: 400 })
+
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 6) {
+      return Response.json({ error: 'El teléfono debe tener al menos 6 números.' }, { status: 400 })
     }
+
+    const syntheticEmail = `${cleanPhone}@salsacasino.com`;
+    const syntheticPassword = cleanPhone;
+    const role = 'student';
 
     // Verificar que quien llama es admin
     const authHeader = request.headers.get('Authorization')
@@ -41,8 +47,8 @@ export async function POST(request: Request) {
 
     // 1. Crear usuario en Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
+      email: syntheticEmail,
+      password: syntheticPassword,
       email_confirm: true,
       user_metadata: { full_name },
     })

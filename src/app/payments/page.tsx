@@ -74,6 +74,8 @@ export default function PaymentsPage() {
           .from('payments').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
         if (history) { setPayments(history); calculateNextMonth(history); }
         else { calculateNextMonth([]); }
+      } else {
+        window.location.href = "/login";
       }
     };
     fetchData();

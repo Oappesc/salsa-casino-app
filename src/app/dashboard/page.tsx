@@ -105,6 +105,8 @@ export default function DashboardPage() {
         if (attData) {
           setAttendances(attData);
         }
+      } else {
+        router.push("/login");
       }
       setLoading(false);
     };

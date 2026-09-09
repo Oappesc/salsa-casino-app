@@ -10,7 +10,7 @@ export default function AdminStudentsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingStudent, setCreatingStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({
-    full_name: "", email: "", password: "", phone: "", birthday: "", sublevel: "Básico I", role: "student"
+    full_name: "", phone: "", birthday: "", sublevel: "Básico I", role: "student"
   });
   const [selectedStudentProfile, setSelectedStudentProfile] = useState<any>(null);
   const [studentDetails, setStudentDetails] = useState({ payments: [] as any[], attendances: [] as any[], loading: false });
@@ -63,7 +63,7 @@ export default function AdminStudentsPage() {
 
       setStudents(prev => [...prev, result.student].sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "")));
       setShowCreateModal(false);
-      setNewStudent({ full_name: "", email: "", password: "", phone: "", birthday: "", sublevel: "Básico I", role: "student" });
+      setNewStudent({ full_name: "", phone: "", birthday: "", sublevel: "Básico I", role: "student" });
       alert("✅ Estudiante creado exitosamente.");
     } catch (err: any) {
       alert("⚠️ Error al crear estudiante: " + err.message);
@@ -208,22 +208,13 @@ export default function AdminStudentsPage() {
                 <input type="text" required value={newStudent.full_name} onChange={e => setNewStudent({...newStudent, full_name: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="Ej: María García" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Correo electrónico *</label>
-                <input type="email" required value={newStudent.email} onChange={e => setNewStudent({...newStudent, email: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="correo@ejemplo.com" />
+                <label className="text-xs font-medium text-slate-500">Teléfono (WhatsApp) *</label>
+                <input type="tel" required value={newStudent.phone} onChange={e => setNewStudent({...newStudent, phone: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="04241234567" />
+                <span className="text-[10px] text-slate-400">Este número será usado por el alumno para iniciar sesión.</span>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Contraseña inicial * (mín. 6 caracteres)</label>
-                <input type="password" required minLength={6} value={newStudent.password} onChange={e => setNewStudent({...newStudent, password: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="••••••" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Teléfono</label>
-                  <input type="tel" value={newStudent.phone} onChange={e => setNewStudent({...newStudent, phone: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="04241234567" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Fecha de Nacimiento</label>
-                  <input type="date" value={newStudent.birthday} onChange={e => setNewStudent({...newStudent, birthday: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" />
-                </div>
+                <label className="text-xs font-medium text-slate-500">Fecha de Nacimiento</label>
+                <input type="date" value={newStudent.birthday} onChange={e => setNewStudent({...newStudent, birthday: e.target.value})} className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
