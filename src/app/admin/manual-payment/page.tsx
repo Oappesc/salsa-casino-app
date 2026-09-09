@@ -11,7 +11,7 @@ export default function AdminManualPaymentPage() {
   const [students, setStudents] = useState<any[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [amount, setAmount] = useState(MONTHLY_FEE.toString());
-  const [reference, setReference] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("pago_movil");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,29 +36,32 @@ export default function AdminManualPaymentPage() {
       return;
     }
     
+    if (!receiptFile) {
+      alert("Por favor adjunta la foto del comprobante.");
+      return;
+    }
+    
     setLoading(true);
     try {
-      let receipt_url = null;
-      if (receiptFile) {
-        const fileExt = receiptFile.name.split(".").pop();
-        const fileName = `${selectedStudentId}-${Date.now()}.${fileExt}`;
-        const { error: uploadError, data } = await supabase.storage
-          .from("payment_receipts")
-          .upload(fileName, receiptFile);
-        
-        if (uploadError) throw uploadError;
-        const { data: publicUrlData } = supabase.storage.from("payment_receipts").getPublicUrl(fileName);
-        receipt_url = publicUrlData.publicUrl;
-      }
+      const fileExt = receiptFile.name.split(".").pop();
+      const fileName = `${selectedStudentId}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from("receipts")
+        .upload(fileName, receiptFile);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: publicUrlData } = supabase.storage.from("receipts").getPublicUrl(fileName);
+      const receipt_url = publicUrlData.publicUrl;
 
       const concept = `Mensualidad de ${MONTH_NAMES[selectedMonth]}`;
 
       const { error } = await supabase.from("payments").insert({
         user_id: selectedStudentId,
         amount: parseFloat(amount),
-        reference: reference || null,
         concept: concept,
-        receipt_url,
+        payment_method: paymentMethod,
+        receipt_url: receipt_url,
         status: "verified" // Manual payments by admin are verified by default
       });
 
@@ -66,7 +69,6 @@ export default function AdminManualPaymentPage() {
 
       alert("Pago registrado y aprobado exitosamente.");
       setSelectedStudentId("");
-      setReference("");
       setReceiptFile(null);
     } catch (err: any) {
       alert("Error al registrar el pago: " + err.message);
@@ -111,6 +113,18 @@ export default function AdminManualPaymentPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500">Método de Pago</label>
+            <select 
+              value={paymentMethod} 
+              onChange={e => setPaymentMethod(e.target.value)} 
+              className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 outline-none" 
+              required
+            >
+              <option value="pago_movil">Pago Móvil</option>
+              <option value="usd_cash">Efectivo USD</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">Monto (USD)</label>
             <div className="relative">
               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -124,20 +138,10 @@ export default function AdminManualPaymentPage() {
               />
             </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-500">Referencia (Opcional)</label>
-            <input 
-              type="text" 
-              value={reference} 
-              onChange={e => setReference(e.target.value)} 
-              className="border border-slate-200 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-purple-500 outline-none" 
-              placeholder="Ej: Efectivo, Zelle..." 
-            />
-          </div>
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">Comprobante (Opcional)</label>
+          <label className="text-xs font-medium text-slate-500">Comprobante (Obligatorio)</label>
           <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center gap-2 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
             <UploadCloud className="text-slate-400" size={32} />
             <span className="text-sm font-medium text-slate-600 text-center">
@@ -148,6 +152,7 @@ export default function AdminManualPaymentPage() {
               type="file" 
               className="hidden" 
               accept="image/*,.pdf"
+              required
               onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {
                   setReceiptFile(e.target.files[0]);
