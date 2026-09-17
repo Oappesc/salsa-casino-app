@@ -50,11 +50,16 @@ export default function PensumPage() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("sublevel, status")
+          .select("sublevel, status, pensum_blocked")
           .eq("id", user.id)
           .single();
           
         if (profile) {
+          if (profile.pensum_blocked) {
+            window.location.href = "/dashboard";
+            return;
+          }
+
           setUserSublevel(profile.sublevel || "Básico I");
           setUserStatus(profile.status || "Activo");
           

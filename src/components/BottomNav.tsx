@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, ListVideo, CreditCard, User, CalendarCheck, CheckSquare, Users, FilePlus, Settings } from "lucide-react";
@@ -7,9 +8,22 @@ import { Home, ListVideo, CreditCard, User, CalendarCheck, CheckSquare, Users, F
 export function BottomNav() {
   const pathname = usePathname();
 
+  const [pensumBlocked, setPensumBlocked] = useState(false);
+
+  useEffect(() => {
+    const checkPensumAccess = async () => {
+      const { data: { user } } = await import('@/lib/supabase').then(m => m.supabase).auth.getUser();
+      if (user) {
+        const { data } = await import('@/lib/supabase').then(m => m.supabase).from('profiles').select('pensum_blocked').eq('id', user.id).single();
+        if (data) setPensumBlocked(data.pensum_blocked);
+      }
+    };
+    checkPensumAccess();
+  }, [pathname]);
+
   const studentNavItems = [
     { href: "/dashboard", icon: Home, label: "Inicio" },
-    { href: "/pensum", icon: ListVideo, label: "Pensum" },
+    ...(pensumBlocked ? [] : [{ href: "/pensum", icon: ListVideo, label: "Pensum" }]),
     { href: "/payments", icon: CreditCard, label: "Pagos" },
     { href: "/profile", icon: User, label: "Perfil" },
   ];

@@ -39,8 +39,12 @@ export default function AdminStudentsPage() {
     return cleaned;
   };
 
-  const handleUpdateStudent = async (studentId: string, sublevel: string, status: string) => {
-    await supabase.from("profiles").update({ sublevel, status }).eq("id", studentId);
+  const handleUpdateStudent = async (studentId: string, sublevel: string, status: string, pensumBlocked?: boolean) => {
+    const updateData: any = { sublevel, status };
+    if (pensumBlocked !== undefined) {
+      updateData.pensum_blocked = pensumBlocked;
+    }
+    await supabase.from("profiles").update(updateData).eq("id", studentId);
     alert("Estudiante actualizado");
     loadStudents();
   };
@@ -153,7 +157,7 @@ export default function AdminStudentsPage() {
                 <select 
                   onClick={(e) => e.stopPropagation()}
                   value={student.sublevel || "Básico I"}
-                  onChange={(e) => handleUpdateStudent(student.id, e.target.value, student.status)}
+                  onChange={(e) => handleUpdateStudent(student.id, e.target.value, student.status, student.pensum_blocked)}
                   className="text-xs bg-slate-50 border border-slate-200 rounded p-1.5"
                 >
                   <option value="Básico I">Básico I</option>
@@ -169,7 +173,7 @@ export default function AdminStudentsPage() {
                 <select 
                   onClick={(e) => e.stopPropagation()}
                   value={student.status || "Activo"}
-                  onChange={(e) => handleUpdateStudent(student.id, student.sublevel, e.target.value)}
+                  onChange={(e) => handleUpdateStudent(student.id, student.sublevel, e.target.value, student.pensum_blocked)}
                   className="text-xs bg-slate-50 border border-slate-200 rounded p-1.5"
                 >
                   <option value="Activo">Activo</option>
@@ -331,7 +335,7 @@ export default function AdminStudentsPage() {
                     <select 
                       value={selectedStudentProfile.sublevel || "Básico I"}
                       onChange={(e) => {
-                        handleUpdateStudent(selectedStudentProfile.id, e.target.value, selectedStudentProfile.status);
+                        handleUpdateStudent(selectedStudentProfile.id, e.target.value, selectedStudentProfile.status, selectedStudentProfile.pensum_blocked);
                         setSelectedStudentProfile({...selectedStudentProfile, sublevel: e.target.value});
                       }}
                       className="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-purple-500"
@@ -343,6 +347,25 @@ export default function AdminStudentsPage() {
                       <option value="Intermedio II">Intermedio II</option>
                       <option value="Avanzado">Avanzado</option>
                     </select>
+                  </div>
+                  
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bloqueo de Pensum</h5>
+                    <p className="text-xs text-slate-500 mb-3">Oculta el módulo de Pensum a este alumno.</p>
+                    <button
+                      onClick={() => {
+                        const newStatus = !selectedStudentProfile.pensum_blocked;
+                        handleUpdateStudent(selectedStudentProfile.id, selectedStudentProfile.sublevel, selectedStudentProfile.status, newStatus);
+                        setSelectedStudentProfile({...selectedStudentProfile, pensum_blocked: newStatus});
+                      }}
+                      className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                        selectedStudentProfile.pensum_blocked
+                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          : "bg-red-100 text-red-700 hover:bg-red-200"
+                      }`}
+                    >
+                      {selectedStudentProfile.pensum_blocked ? "Desbloquear Pensum" : "Bloquear Pensum"}
+                    </button>
                   </div>
                 </>
               )}
