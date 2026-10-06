@@ -38,7 +38,14 @@ export function BottomNav() {
     { href: "/admin/profile", icon: Settings, label: "Perfil" },
   ];
 
-  if (pathname === "/login" || pathname === "/register" || pathname === "/") return null;
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/" ||
+    pathname === "/pensum-publico"
+  ) {
+    return null;
+  }
 
   const isAdminRoute = pathname.startsWith("/admin");
   const navItems = isAdminRoute ? adminNavItems : studentNavItems;
