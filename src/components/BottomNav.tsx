@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, ListVideo, CreditCard, User, CalendarCheck, CheckSquare, Users, FilePlus, Settings } from "lucide-react";
 
+import { supabase } from "@/lib/supabase";
+
 export function BottomNav() {
   const pathname = usePathname();
 
@@ -12,9 +14,9 @@ export function BottomNav() {
 
   useEffect(() => {
     const checkPensumAccess = async () => {
-      const { data: { user } } = await import('@/lib/supabase').then(m => m.supabase).auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await import('@/lib/supabase').then(m => m.supabase).from('profiles').select('pensum_blocked').eq('id', user.id).single();
+        const { data } = await supabase.from('profiles').select('pensum_blocked').eq('id', user.id).single();
         if (data) setPensumBlocked(data.pensum_blocked);
       }
     };
